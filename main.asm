@@ -11,10 +11,10 @@ EXTRN is_all
 
 data segment PARA PUBLIC 'data' 
 hello db ' Esc - Вых,'
-      db ' F1 - зап./ост. движущийся обьект' 
-      db ' F2 - зап./ост. поток вывода на экран информации из файла'
-      db ' F3 - зап./ост. поток чтения из файла'
-      db ' F4 - зап./ост. вывод заголовка работы'
+      db ' F1 - зап./ост. поток чтения из файла' 
+      db ' F2 - зап./ост. поток вывода на экран информации из файла' 
+      db ' F3 - зап./ост. вывод заголовка работы'
+      db ' F4 - зап./ост. движущийся обьект' 
       db ' F5 - зап./ост. часы'
       db ' q/w - +/- время работы потока чтения из файла'
       db ' +/- вр. работы потока вывода из файла'
@@ -111,7 +111,7 @@ main proc
  
     call init_reader_writer_process
     inc cs:threadsRegistered
-    ; inc cs:threadsRegistered
+    inc cs:threadsRegistered
 
     call init_title_process
     inc cs:threadsRegistered

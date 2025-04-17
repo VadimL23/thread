@@ -1,8 +1,7 @@
 .MODEL SMALL
 include prc_ids.inc
 include struc.inc
-; 4a61:0120
-; 4a610026
+
 EXTRN gotoxy:PROC, draw_window:PROC, write:PROC, _getxy:PROC, open:PROC
 EXTRN read:PROC, clrscr:PROC, paramstr_array:BYTE, paramstr:PROC, seek_start:PROC
 
@@ -15,29 +14,28 @@ data segment PARA PUBLIC 'DATA'
     allredy_installed_err db 'Allredy installed!$'
    ;------- file ---------
    
-    ;---------------------
-    str_status_active db 'Активен','$'
-    str_status_wait db 'Ожидает$'
-    str_status_suspended db 'Приостановлен$'
-    str_status_error db 'Status unknown$'
-
-    str_thread_first db 'Поток №1: $'
-    str_thread_second db 'Поток №2: $'
-    str_thead_length equ $-str_thread_second
-    ;---------------------
-
     status_r db status_wait
     status_w db status_wait
 
     ;------ queue ---------
     head dw 0
     tail dw 0
-    buff_size equ 2             ; Размер очереди (количество строк)
-    buff_string_length equ 5   ; Размер строки (1 байт на длину + 30 байт на данные)
+    buff_size equ 3             ; Размер очереди (количество строк)
+    buff_string_length equ 23   ; Размер строки (1 байт на длину + 22 байт на данные)
     bsl equ 10
     buff_top db 0
     buff_str db buff_size dup (buff_string_length dup(20h)) ; Буфер для очереди
     ;------ queue ---------
+
+   ;-------- for G.L.Peterson algorithm since 1981 year -------
+
+        true equ 1
+        false equ 0
+        thread_count equ 2
+        intrested db 2 dup(0)
+        turn db 0
+        
+   ;============================================================
 
 data ends
 
@@ -81,7 +79,7 @@ code segment PARA PUBLIC 'code'
     ;------ Vectors -------------
     old_2fh dd 0 ; bc de   38 01 f1 48
     ;-----------------------------
-
+ 
 new_2fh proc
     local
     cmp ah, process_function_2f
@@ -100,6 +98,16 @@ new_2fh proc
 @exit:    
     jmp cs:old_2fh
 new_2fh endp
+
+@enter_region macro process
+   mov si,1
+   sub si,process
+   lea di,intrested
+   add di,process
+   mov byte ptr [di], true
+   mov byte ptr turn, process
+
+endm
 
 init: 
         mov ax, data
@@ -142,41 +150,46 @@ init:
         mov ds, ax  
 
         @init_process readwrite_process_id, @start_process_read
-       ; @init_process process_write_id, @start_process_write
-
-;   call open_file
-; @cycle_1:          
-                
-;         call process_read_from_file
-;         call process_stdout
-; @queue_empty_1:
-;         jmp @cycle_1
-
+        @init_process process_write_id, @start_process_write
+        @get_ptr_to_thread_data 2
+        mov ax,word ptr es:[di].TThread.r_sp 
+        sub ax,100h
+        mov word ptr es:[di].TThread.r_sp,ax
 
 outprog:
         mov dx,cs:program_length
         mov ax, 3100h
         int 21h
 
-@start_process_read:
+@start_process_read:                   ;4AB7:0189
        call open_file
-@cycle:                         ;4A61:011B
+@cycle:  
+        @enter_region 0
+@wait_read:
+        cmp byte ptr turn,0
+        jne @read_turn
+        cmp byte ptr intrested+1, true
+        jmp @wait_read
+@read_turn:                               
         mov ax,cs:signal_stop_process
         or ax,ax
         jne @stop_TSR         
         call process_read_from_file
-        call process_stdout
-;@queue_empty:
         jmp @cycle
 
-; @start_process_write:    
-;         mov ax,cs:signal_stop_process
-;         or ax,ax
-;         jne @stop_TSR         
-;         ; call process_read_from_file
-;         ;call process_stdout
-; ; @queue_empty:
-;         jmp @start_process_write
+@start_process_write:                   ;4AB7:019C
+        @enter_region 1
+@wait_write:
+        cmp byte ptr turn,1
+        jne @write_turn
+        cmp byte ptr intrested, true
+        jmp @wait_write
+@write_turn: 
+        mov ax,cs:signal_stop_process
+        or ax,ax
+        jne @stop_TSR
+        call process_stdout
+        jmp @start_process_write
 
 @stop_TSR:
         @deactivate_process readwrite_process_id
@@ -420,60 +433,6 @@ scroll_up proc
         pop bp
         ret 8
 scroll_up endp
-
-; Печатает статус потока
-; Вход: ah - статус потока
-
-print_status proc
-        local
-        push bp
-        mov bp,sp
-        push dx ax
-        push ax
-        ; call _getxy
-        ;******* getxy ******
-        push cx dx bx
-        mov bh,0
-        mov ah,3h
-        int 10h
-        mov ax, dx
-        pop bx dx cx
-        ;******* getxy ******
-        mov dx, ax
-
-        mov ax,011ah
-        push ax
-        call gotoxy
- 
-        pop ax
-       
-        cmp ah, status_active
-        jz @active
-        cmp ah, status_suspended
-        jz @suspended
-        cmp ah, status_wait
-        jz @wait
-        
-        jmp @status_err
-@active:
-        print_str str_status_active
-        jmp @out
-@suspended:
-        print_str str_status_suspended
-        jmp @out
-@wait:
-        print_str str_status_wait
-        jmp @out
-@status_err:
-        print_str str_status_error
-@out:
-        push dx
-        call gotoxy
-        pop  ax dx
-        mov sp,bp
-        pop bp
-        ret
-print_status endp
 
 get_file_name_from_paramstr proc
   

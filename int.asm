@@ -29,10 +29,10 @@ kb_up_arrow_msg db 'U',03h,'P',03h
 kb_down_arrow_msg db 'D',04h,'N',04h
 
 kb_esc equ 01h
-kb_F1 equ 3Bh   ;зап./ост. движущийся обьект 
+kb_F1 equ 3Bh   ;зап./ост. поток чтения из файла  
 kb_F2 equ 3Ch   ;зап./ост. поток вывода на экран информации из файла
-kb_F3 equ 3Dh   ;зап./ост. поток чтения из файла
-kb_F4 equ 3Eh   ;зап./ост. вывод заголовка
+kb_F3 equ 3Dh   ;зап./ост. вывод заголовка
+kb_F4 equ 3Eh   ;зап./ост. движущийся обьект
 kb_F5 equ 3Fh   ;зап./ост. часы
 kb_F6 equ 40h
 kb_F7 equ 41h
@@ -97,12 +97,12 @@ new_09h proc far
 
          cmp     al,kb_F4             
          jne      @dont_F4           
-         @kb_handler_start_stop_process 3
+         @kb_handler_start_stop_process 4
 @dont_F4:     
        
         cmp     al,kb_F5             
          jne      @dont_F5           
-         @kb_handler_start_stop_process 4
+         @kb_handler_start_stop_process 5
 @dont_F5: 
 
         cmp     al, kb_right_arrow
