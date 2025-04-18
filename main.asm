@@ -15,11 +15,14 @@ hello db ' Esc - Вых,'
       db ' F2 - зап./ост. поток вывода на экран информации из файла' 
       db ' F3 - зап./ост. вывод заголовка работы'
       db ' F4 - зап./ост. движущийся обьект' 
-      db ' F5 - зап./ост. часы'
-      db ' q/w - +/- время работы потока чтения из файла'
-      db ' +/- вр. работы потока вывода из файла'
-      db ' +/- вр. вывода заголовка'
-      db ' +/- вр. дв. обьекта'    
+      db ' F5 - зап./ост. часы '
+    ;   db ' q/w - +/- время работы потока чтения из файла'
+    ;   db ' +/- вр. работы потока вывода из файла'
+    ;   db ' +/- вр. вывода заголовка'
+    ;   db ' +/- вр. дв. обьекта'   
+      db 'UP/DN/LT/RT - перемещение движущегося обьекта ' 
+      db 'r - возобновить случайное движение. '
+      db 'Статусы: 0 - приостановлен, 1 - активен. '
 hello_length equ $-hello
 text_color equ 003h
 
@@ -105,7 +108,7 @@ main proc
 
     call init_process_table
     inc cs:threadsRegistered
-    @init_process main_process_id, @infinity
+    @fork main_process_id, @infinity
 
     call draw_window_process
  
@@ -121,8 +124,6 @@ main proc
   
     call init_clock_process
     inc cs:threadsRegistered
-
-
  
    call init_interrupts
 @infinity:

@@ -1,8 +1,15 @@
 
-bios_process_linked_seg equ 040h
-bios_process_linked_offs equ 0f0h
+; ****************************************************************
+; * Модуль вспомогательных макросов                              *
+; *                                                              *
+; ****************************************************************
 
-; es:di - address of process in the process table
+bios_process_linked_seg equ 040h              ; Сегмент и смещение пользовательских данных
+bios_process_linked_offs equ 0f0h             ; предназначенных для мнэпроцессного взаимодействия
+
+; es:di - The address of process in the process table
+
+; Макрос устанавливает указатель es:di на первую запись в таблице потоков по номеру потока
 
 @get_ptr_to_data macro num
     xor ax,ax
@@ -15,6 +22,7 @@ bios_process_linked_offs equ 0f0h
     mov es,ax
   endm
 
+; Макрос устанавливает указатель es:di на произвольную запись в таблице потоков по номеру потока
 
 @get_ptr_to_thread_data macro process_num
     xor ax,ax
@@ -31,7 +39,9 @@ bios_process_linked_offs equ 0f0h
     add di,ax
     endm
 
-@init_process macro process_num, savearea 
+; Макрос инициализирует нлвую запись в ьаблице процессов
+
+@fork macro process_num, savearea 
     pushf
     mov ax,cs
     push ax
@@ -40,45 +50,44 @@ bios_process_linked_offs equ 0f0h
     xor ax,ax
     push ax bx cx dx si di ds es 
     xor ax,ax
-    push ax   ;bp
-
+    push ax                               ;bp
     @get_ptr_to_thread_data process_num
-
-    ;lea di, es:[bx[si * process_num]]
-  ;  xor ax,ax
     pushf
     pop ax
     stosw
-    mov ax,cs           ;cs
+    mov ax,cs                             ;cs
     stosw
-    lea ax, savearea   ;ip
+    lea ax, savearea                      ;ip
     stosw
-    mov cx, 6           ;ax, bx, cx, dx, si, di
+    mov cx, 6                             ;ax, bx, cx, dx, si, di
     mov ax,0
 rep stosw
-    mov ax, data        ;ds
+    mov ax, data                          ;ds
     stosw
-    mov ax, 0           ;es
+    mov ax, 0                             ;es
     stosw
     mov ax, bp
-    stosw               ;bp
+    stosw                                 ;bp
     mov ax,sp
     ;sub ax,24
-    stosw                ;sp
+    stosw                                 ;sp
     mov ax,ss
-    stosw                 ;ss
+    stosw                                 ;ss
     mov al, 1
     stosb
     xor ax,ax
-    mov ax,bp           ;
-   ; pop es cx si di bx ax
+    mov ax,bp           
 endm
+
+; Макрос устанавливает статус потока нефктивным
 
 @deactivate_process macro process_num
 @get_ptr_to_thread_data process_num
 mov al,0
 mov byte ptr es:[di].TThread.status,al
 endm
+
+; Макрос восстанавливает старое значение вектор прерывания
 
 @restore_vect macro inum, savearea
     push ax es dx 
@@ -92,6 +101,8 @@ endm
     sti
     pop dx es ax
  endm
+
+; Макрос сохраняет вектор прерывания и устанавливает новое значение
 
  @change_vect macro inum, new, savearea
     push ax es dx 
@@ -110,16 +121,17 @@ endm
  endm
 
 ;************** KEYBOARD ********************
+; Макрос для отработки аппаратного прерывания клавиатуры
 
  @perepere_int09 macro
-;------ слея┐╜я┐╜я┐╜щий я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜ходя┐╜я┐╜ я┐╜я┐╜я┐╜ я┐╜я┐╜рабя┐╜тки я┐╜я┐╜я┐╜я┐╜я┐╜тноя┐╜я┐╜ я┐╜я┐╜я┐╜ывая┐╜я┐╜я┐╜
-         in      al,kb_ctrl         ;я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜ченя┐╜e я┐╜я┐╜я┐╜я┐╜ я┐╜равя┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜рой
-         mov     ah,al              ; я┐╜я┐╜раня┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜
-         or      al,80h             ;я┐╜я┐╜таня┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜ разя┐╜шеня┐╜я┐╜ я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
-         out     kb_ctrl,al         ; я┐╜ я┐╜ывея┐╜я┐╜ я┐╜я┐╜я┐╜ я┐╜ я┐╜равя┐╜я┐╜я┐╜щий я┐╜я┐╜я┐╜я┐╜
-         xchg    ah,al              ;я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜ходя┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜ченя┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜
-         out     kb_ctrl,al         ; я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜тно
-         mov     al,eoi             ;я┐╜я┐╜слая┐╜я┐╜ сигя┐╜я┐╜я┐╜ "я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜ывая┐╜я┐╜я┐╜"
-         out     int_ctrl,al        ; я┐╜я┐╜я┐╜я┐╜роля┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜ывая┐╜я┐╜я┐╜ 8259
+         ;------ следующий код необходим для отработки аппаратного прерывания
+         in      al,kb_ctrl         ;взять значениe порта управления клавиатурой
+         mov     ah,al              ; сохранить его
+         or      al,80h             ;установить бит разрешения для клавиатуры
+         out     kb_ctrl,al         ; и вывести его в управляющий порт
+         xchg    ah,al              ;извлечь исходное значение порта
+         out     kb_ctrl,al         ; и записать его обратно
+         mov     al,eoi             ;послать сигнал "конец прерывания"
+         out     int_ctrl,al        ; контроллеру прерываний 8259    
  endm
 ;************** KEYBOARD ********************

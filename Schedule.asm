@@ -1,3 +1,7 @@
+
+; ***************************************************************
+; *    „ƒ€€ ‹€‚™€                                *
+; ***************************************************************
 .model SMALL
 include int_macr.inc
 include struc.inc
@@ -5,10 +9,10 @@ include struc.inc
 public old_08h
 public scheduler
 
-;***** variables ******
+;************************ variables *****************************
 public disableHardwareEvents
 public threadsRegistered
-;***** variables ******
+;************************ variables *****************************
 
 code segment PARA PUBLIC 'code'
 assume cs:code, ds:code
@@ -321,7 +325,7 @@ rep movsb
     mov ah,0ch    
  rep stosw
     lea si, thread_str
-    mov cx, 90
+    mov cx, 96
 rep movsb
  ; ¥η β ¥β αβ βγαλ ―®β®ª®Ά
 
@@ -345,7 +349,7 @@ loop @get_statuses
     
     lea bx, status_threads_table
     mov cx, threadsRegistered
-    sub di, 76
+    sub di, 82
 @out_statuses: 
     
     mov al, byte ptr [bx]

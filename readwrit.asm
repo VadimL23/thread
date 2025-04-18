@@ -1,41 +1,48 @@
+; ***************************************************************
+; *     ПРОГРАММА ЧТЕНИЯ ДАННЫХ ИЗ ФАЙЛА И ВЫВОДА НА ЭКРАН      *
+; * Использование: readwrite.exe <file_name>                    *
+; * Программа читает данные из файла и выводит данный в рабочую *
+; * область. Структура программы Производитель-потребитель.     *
+; * Оба потока (нити) работают независимо. Для доступа к        * 
+; * разделяемой памяти(кольцевому буферу), реализован алго-     *
+; * ритм Петерсона.                                             *
+; *                                                             * 
+; ***************************************************************
+
 .MODEL SMALL
 include prc_ids.inc
+include struc.inc
+include utils.inc
+include int_macr.inc
 include struc.inc
 
 EXTRN gotoxy:PROC, draw_window:PROC, write:PROC, _getxy:PROC, open:PROC
 EXTRN read:PROC, clrscr:PROC, paramstr_array:BYTE, paramstr:PROC, seek_start:PROC
 
 data segment PARA PUBLIC 'DATA'
-   ;------- file ---------
+   ;---------------------- file --------------------------------
     file_name db 'text.txt',0
     db 100 dup(0)
     handle dw 0
     file_not_found_err db 'File not found!$'
     allredy_installed_err db 'Allredy installed!$'
-   ;------- file ---------
-   
-    status_r db status_wait
-    status_w db status_wait
+   ;---------------------- file --------------------------------
 
-    ;------ queue ---------
-    head dw 0
-    tail dw 0
+    ;--------------------- queue ------------------------------
+    head dw 0                   ; указатель начала кольцевого буфера
+    tail dw 0                   ; указатель хвота кльцевого буфера
     buff_size equ 3             ; Размер очереди (количество строк)
     buff_string_length equ 23   ; Размер строки (1 байт на длину + 22 байт на данные)
-    bsl equ 10
-    buff_top db 0
-    buff_str db buff_size dup (buff_string_length dup(20h)) ; Буфер для очереди
-    ;------ queue ---------
+    buff_str db buff_size dup (buff_string_length dup(20h)) ; кольцевой буфер
+    ;--------------------- queue ------------------------------
 
-   ;-------- for G.L.Peterson algorithm since 1981 year -------
-
+    ;-------- for G.L.Peterson algorithm since 1981 year -------
         true equ 1
         false equ 0
         thread_count equ 2
         intrested db 2 dup(0)
         turn db 0
-        
-   ;============================================================
+    ;============================================================
 
 data ends
 
@@ -44,42 +51,22 @@ code segment PARA PUBLIC 'code'
     jmp init
 
     stdout equ 1
-    cr     equ 10
-    lf     equ 13 
-
-    status_active  equ 1
-    status_wait      equ 2
-    status_suspended equ 4
-
-    include utils.inc
-    include int_macr.inc
-
-   ;------ screen --------
-    leftTop equ 201
-    rightTop equ 187
-    horizontal equ 205
-    vertical equ 186
-    leftBottom equ 200
-    rightBottom equ 188
-    col_max = 79
-    row_max = 24
-    cursor dw 0
-    
-;     readwrite_process_id equ 1
-    process_write_id equ 2
-    installed equ 0ffh
-    process_function_2f equ 0c0h + readwrite_process_id -1
-
-    include struc.inc
+    cr     equ 10                 ; перевод каретки
+ 
+;     readwrite_process_id equ 1  ; id процесса чтения из файла
+    process_write_id equ 2        ; id процесса вывода на экран
+    installed equ 0ffh            ; константа для проверки уже запущен процеили нет, для избежания дубля резедента в памяти
+    process_function_2f equ 0c0h + readwrite_process_id -1  ; Функция процесса, прерывания 2f
    ;------ screen --------
         
-    wnd TWind<1,0,15,39,1,1,14,38>
-    program_length dw 0
-    signal_stop_process dw 0
+    wnd TWind<1,0,15,39,1,1,14,38>  ; структура для построения окна программы
+    program_length dw 0             ; хранит длину программы в параграфах
+    signal_stop_process dw 0        ; сигнал остановки процесса
     ;------ Vectors -------------
-    old_2fh dd 0 ; bc de   38 01 f1 48
+    old_2fh dd 0                    ; хранит значение вектора 2f 
     ;-----------------------------
  
+; Обработчик прерывания 2f
 new_2fh proc
     local
     cmp ah, process_function_2f
@@ -99,6 +86,7 @@ new_2fh proc
     jmp cs:old_2fh
 new_2fh endp
 
+; Макрос для реализации алгоритма Петерсона
 @enter_region macro process
    mov si,1
    sub si,process
@@ -106,17 +94,16 @@ new_2fh endp
    add di,process
    mov byte ptr [di], true
    mov byte ptr turn, process
-
 endm
 
-init: 
+init:
         mov ax, data
         mov ds,ax
         mov ax,zzzz
         mov dx, es
         sub ax,dx
-        mov cs:program_length,ax
-        xor ax,ax
+        mov cs:program_length,ax                ; Вычисление размера программы в параграфах
+        xor ax,ax                               ; для оставления программы в памяти резедентной
         mov ah,process_function_2f
         int 2fh
         cmp al, installed
@@ -125,43 +112,40 @@ init:
 
 @not_installed:        
         @change_vect 2fh new_2fh cs:old_2fh
-
         mov ax, seg code
         mov ds, ax
-
         call get_file_name_from_paramstr
 
 @without_param:
-        ;call clrscr     ; TODO:: commit it after test !!!
+        ;call clrscr                            ; commit it after test !!!
         mov ax, seg wnd
         push ax 
         mov ax, offset wnd
         push ax
-        call far ptr draw_window
-        
+        call far ptr draw_window                ; инициализация окна
         mov ax,seg wnd
         mov ds,ax
         mov dh,byte ptr wnd.inner_right_bottom_row
         mov dl,1
         push dx
-        call gotoxy
-      
+        call gotoxy     
         mov ax, data
         mov ds, ax  
 
-        @init_process readwrite_process_id, @start_process_read
-        @init_process process_write_id, @start_process_write
-        @get_ptr_to_thread_data 2
-        mov ax,word ptr es:[di].TThread.r_sp 
-        sub ax,100h
-        mov word ptr es:[di].TThread.r_sp,ax
+        @fork readwrite_process_id, @start_process_read ; установим первый поток (читает данные из файла)
+        @fork process_write_id, @start_process_write    ; установим второй поток (выводит  данные на экран)
+        @get_ptr_to_thread_data 2                       ; т.к. процесс один, то разделим стек междудвумя потоками
+        mov ax,word ptr es:[di].TThread.r_sp            ;
+        sub ax,100h                                     ;
+        mov word ptr es:[di].TThread.r_sp,ax            ;
 
-outprog:
+outprog:                                        ; завершаем и оставляем резидентной
         mov dx,cs:program_length
         mov ax, 3100h
         int 21h
 
-@start_process_read:                   ;4AB7:0189
+
+@start_process_read:                            ; подпрограмма чтения из файла              
        call open_file
 @cycle:  
         @enter_region 0
@@ -177,7 +161,7 @@ outprog:
         call process_read_from_file
         jmp @cycle
 
-@start_process_write:                   ;4AB7:019C
+@start_process_write:                           ; подпрограмма вывода на экран                  
         @enter_region 1
 @wait_write:
         cmp byte ptr turn,1
@@ -192,9 +176,9 @@ outprog:
         jmp @start_process_write
 
 @stop_TSR:
-        @deactivate_process readwrite_process_id
+        @deactivate_process readwrite_process_id ; остановим программу и освободим память
 @rrr:
-        jmp @rrr        ; This is STUB 
+        jmp @rrr                                 ; This is STUB 
 
 do_exit proc
         mov ax,0d23h
@@ -210,6 +194,8 @@ do_exit proc
         ret
 do_exit endp
 
+; процедура открытия файла
+
 open_file proc
         push bp
         mov bp,sp
@@ -224,7 +210,6 @@ open_file proc
         jnc @file_found
         print_str file_not_found_err
 @file_found:
-
         mov handle, ax
         push ax
         call seek_start  
@@ -233,15 +218,15 @@ open_file proc
         ret
 open_file endp
 
+; подпрограмма вывода на экран
+
 process_stdout proc
        push bp
        mov bp,sp
        push di bx cx 
        mov di,0
 @stdout_next_str: 
-
-        mov ax, [tail]
-        
+        mov ax, [tail]   
         mov di, buff_string_length
         mul di
         xchg di, ax
@@ -249,14 +234,12 @@ process_stdout proc
         xor cx,cx
         mov cl, [bx]            ; количество символов в строке
         inc bx                  ; указатель на начало строки
-
-        call stdout_string
-     
+        call stdout_string  
         mov bx, [tail]
         inc bx
         cmp bx, buff_size
         jl @no_wrap_tail
-        xor bx, bx                 ; Сброс tail, если достигнут конец буфера
+        xor bx, bx               ; Сброс tail, если достигнут конец буфера
 @no_wrap_tail:
         mov tail, bx
         mov ax, [head]
@@ -271,14 +254,14 @@ process_stdout proc
         ret
 process_stdout endp
 
-        ; Выводит символы в цикле
-        ; bp - increment
-        ; cx - количество символов в строке
+; Выводит символы в цикле
+; bp - increment
+; cx - количество символов в строке
+
 stdout_string proc
         push bp
         mov bp, sp
 @stdout_buff_string:
-        ; call _getxy
         ;******* getxy ******
         push cx dx bx
         mov bh,0
@@ -314,10 +297,11 @@ stdout_string proc
         ret
 stdout_string endp
 
-process_read_from_file proc   ; 4a61:0120
+; процедура чтения данных из файла
+
+process_read_from_file proc       
         push bp
         mov bp, sp
-
         mov ax, [head]
         mov bx, [tail]
         cmp ax, buff_size - 1
@@ -329,23 +313,20 @@ process_read_from_file proc   ; 4a61:0120
         xchg di, ax
         mov ax, data
         mov ds,ax
-        lea dx, buff_str[di+1]
-        
+        lea dx, buff_str[di+1]       
         push handle
         mov ax, buff_string_length-1
         push ax
         call read
-
         dec dx
         mov bx, dx
         mov byte ptr [bx],al
         cmp al, buff_string_length-1
         je @not_eof 
         push word ptr handle
-        call seek_start
-
+        call seek_start            ; установим указатель на началофайла
 @not_eof:
-        mov ax, [head]     ; Проверка на переполнение
+        mov ax, [head]             ; Проверка на переполнение
         mov bx, [tail]
         inc ax
         cmp ax, buff_size 
@@ -354,24 +335,23 @@ process_read_from_file proc   ; 4a61:0120
 @no_wrap:
         mov head, ax
         cmp ax, bx
-        je @queue_full             ; Если head == tail, очередь переполнена
-    
+        je @queue_full             ; Если head == tail, очередь переполнена   
         jmp @process_read
-
 @queue_full:
         mov sp, bp
         pop bp
         ret
 process_read_from_file endp
 
+; процедура прокрутки окна
 ;bp+4 - TWind
+
 scroll_window_up proc
         local
         push bp
         mov bp, sp
         push bx cx dx ax
         mov bx,[bp+4]
-        ; call _getxy
         ;******* getxy ******
         push cx dx bx
         mov bh,0
@@ -394,9 +374,7 @@ scroll_window_up proc
         push ax
         mov ax, 0fh
         push ax
-        
         call scroll_up
-       
         mov dh, byte ptr cs:[bx].TWind.inner_right_bottom_row
         mov dl, byte ptr cs:[bx].TWind.inner_left_top_col
         push dx
@@ -410,15 +388,14 @@ scroll_window_up endp
 
 
 ; Скролинг вверх
-; bp+10(сх) ? координаты левого верхнего угла прямоугольной области экрана (ch ? строка, cl ? столбец), 
-; bp+8(dx) ? координаты правого нижнего угла (dh ? строка, dl ? столбец), 
-; bp+6(al) ? на сколько строк прокручивать заданное окно (при al = 0 все заданное окно очищается), 
+; bp+10(сх) - координаты левого верхнего угла прямоугольной области экрана (ch - строка, cl - столбец), 
+; bp+8(dx) - координаты правого нижнего угла (dh ? строка, dl ? столбец), 
+; bp+6(al) - на сколько строк прокручивать заданное окно (при al = 0 все заданное окно очищается), 
 ; bp+4(bh) - атрибуты для заполнения освобождающихся строк (7 - белый по черному)
 
 scroll_up proc
         push BP
         mov bp,sp
-
         push ax bx cx
         mov cx, [bp+10]
         mov dx, [bp+8]
@@ -428,14 +405,12 @@ scroll_up proc
         ;mov bh, 0fh
         int 10h
         pop cx bx ax
-
         mov sp, bp
         pop bp
         ret 8
 scroll_up endp
 
-get_file_name_from_paramstr proc
-  
+get_file_name_from_paramstr proc 
         push bp
         mov bp,sp
         push cx bx es ds

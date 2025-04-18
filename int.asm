@@ -44,6 +44,8 @@ kb_left_arrow  equ 4bh
 kb_down_arrow  equ 50h
 kb_up_arrow    equ 48h
 
+kb_r  equ 13h
+
     old_09h   dd 0
 
 @kb_handler macro sting
@@ -111,7 +113,7 @@ new_09h proc far
         @kb_handler kb_right_arrow_msg
         @get_ptr_to_data 1
         mov byte ptr es:[di+2], 0
-        mov byte ptr es:[di+1], 1 ; mov byte ptr es:row_k,-1
+        mov byte ptr es:[di+1], 1
 @dont_kb_right_arrow:
         
         cmp     al, kb_left_arrow
@@ -120,7 +122,7 @@ new_09h proc far
         @kb_handler kb_left_arrow_msg
         @get_ptr_to_data 1
         mov byte ptr es:[di+2], 0
-        mov byte ptr es:[di+1], -1 ; mov byte ptr es:row_k,-1
+        mov byte ptr es:[di+1], -1
 
  @dont_kb_left_arrow:
         
@@ -130,7 +132,7 @@ new_09h proc far
         @kb_handler kb_down_arrow_msg
         @get_ptr_to_data 1
         mov byte ptr es:[di+2], 0
-        mov byte ptr es:[di], 1 ; mov byte ptr es:col_k,1
+        mov byte ptr es:[di], 1
 @dont_kb_down_arrow:
         
         cmp     al, kb_up_arrow
@@ -139,9 +141,18 @@ new_09h proc far
         @kb_handler kb_up_arrow_msg
         @get_ptr_to_data 1
         mov byte ptr es:[di+2], 0
-        mov byte ptr es:[di], -1 ; mov byte ptr es:col_k,-11
+        mov byte ptr es:[di], -1
 @dont_kb_up_arrow:
          
+        cmp     al, kb_r
+        jne      @dont_kb_r
+        @perepere_int09
+        @get_ptr_to_data 1
+        mov byte ptr es:[di+2], 1
+        mov byte ptr es:[di+1], 1
+        mov byte ptr es:[di], 1
+@dont_kb_r:
+
          cmp     al,kb_esc          ;
          jne      @dont_esc          ;
         call do_esc 

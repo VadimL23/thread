@@ -15,18 +15,10 @@ public col_k
   video equ 0b800h
   text_color equ 02h
 
-
 data segment PARA PUBLIC 'DATA'
     string db 1h, text_color
     string_space db 20h, 0
     ;---------------------
-    str_status_active db 'Активен','$'
-    str_status_wait db 'Ожидает$'
-    str_status_suspended db 'Приостановлен$'
-    str_status_error db 'Status unknown$'
-    str_thread_first db 'Поток №1: $'
-    str_thread_second db 'Поток №2: $'
-    str_thead_length equ $-str_thread_second
     allredy_installed_err db 'Allredy installed!$'
     ;---------------------
     ; status_r db wait
@@ -113,7 +105,7 @@ init:
         mov ax, data
         mov ds, ax  
 
-        @init_process ball_process_id, @start_process
+        @fork ball_process_id, @start_process
 
         call init_process_structure_table
 

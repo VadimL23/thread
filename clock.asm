@@ -1,3 +1,13 @@
+; ***************************************************************
+; *     ПРОГРАММА ВЫВОДА ЧАСОВ НА ЭКРАН                         *
+; * Использование: clock.exe <[00;01;10;11]>                    *
+; *   00 - вывод в верхнем левом углу экрана                    *
+; *   01 - вывод в верхнем правом углу экрана                   *
+; *   10 - вывод в нижнем левом углу экрана                     *
+; *   11 - вывод в нижнем правом углу экрана                    *
+; *                                                             *
+; ***************************************************************
+
 .MODEL SMALL
 include prc_ids.inc
 include struc.inc
@@ -81,7 +91,7 @@ init:
         mov ax, data
         mov ds, ax  
 
-        @init_process clock_process_id, @start_process
+        @fork clock_process_id, @start_process
 
 ;         @cycle1:   
 ;         call process
@@ -166,7 +176,7 @@ get_time proc
         push ax cx dx
         mov ah,2ch
         int 21h
-        ; я┐╜я┐╜я┐╜я┐╜чим я┐╜ я┐╜я┐╜рабя┐╜таея┐╜ я┐╜я┐╜я┐╜
+        ; ????? ? ?????? ???
         mov ax, cx
         and ax,0ff00h
         shr ax,8
@@ -176,7 +186,7 @@ get_time proc
         mov byte ptr current_time,ah
         mov byte ptr [current_time+2],al
 
-        ; я┐╜я┐╜я┐╜я┐╜чим я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
+        ; ????? ??????
         mov ax, cx
         and ax,0ffh
         aam
@@ -185,7 +195,7 @@ get_time proc
         mov byte ptr [current_time+6],ah
         mov byte ptr [current_time+8],al
 
-        ; я┐╜я┐╜я┐╜я┐╜чим секундя┐╜
+        ; ????? ???
         mov ax, dx
         and ax,0ff00h
         shr ax,8

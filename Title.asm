@@ -1,3 +1,11 @@
+; ***************************************************************
+; *     ПРОГРАММА ВЫВОДА ЗАГОЛОВКА РАБОТЫ НА ЭКРАН              *
+; * Использование: title.exe <[0;1]>                            *
+; *   0 - вывод заголовка вверху экрана                         *
+; *   1 - вывод заголовка внизу экрана                          *
+; *                                                             *
+; ***************************************************************
+
 .model SMALL
 include prc_ids.inc
 include struc.inc
@@ -6,18 +14,10 @@ include utils.inc
 
 EXTRN gotoxy:PROC, clrscr:PROC, _getxy:PROC, paramstr:PROC, paramstr_array, atoi:PROC
 
-print_colored macro str
-    push dx
-    mov ah,09h
-    lea dx, str
-    int 21h
-    pop dx
-endm
-
-; title_process_id equ 2
+; title_process_id equ 2                                ; Номер процесса
 is_test equ 0
 installed equ 0ffh
-function_2f equ 0c0h + title_process_id -1
+function_2f equ 0c0h + title_process_id -1              ; номер функции 2f
 
 data segment PARA PUBLIC 'DATA'
     program_length dw 0
@@ -32,15 +32,14 @@ code segment PARA PUBLIC 'CODE'
 
 jmp init
 
-;------ Vectors -------------
+;------------------- Vectors -----------------------
 
 old_2fh dd 0
-
+;---------------------------------------------------
 color db 1
-
 signal_stop_process dw 0
 maincs dw 0
-;-----------------------------
+;---------------------------------------------------
 
 new_2fh proc
     local
@@ -78,7 +77,7 @@ new_2fh endp
         jne @without_param
         inc location
 
-@without_param:
+@without_param:                                        ; вычисляем размер в параграфах, оставляем резидентной
         mov ax,zzz
         mov dx, es
         sub ax,dx
@@ -104,28 +103,25 @@ new_2fh endp
         mov ax, 0b800h
         mov es,ax
         
-       @init_process title_process_id, @cycle
-     
-        ;call free_not_used_mem
-; jmp stdout_time
-        mov ax, cs
+       @fork title_process_id, @cycle
+
+        mov ax, cs                                     ; выходим и оставляем TSR
         mov cs:maincs, ax 
         mov dx,program_length
         mov ax, 3100h
         int 21h
 
-@cycle:
+@cycle:                                                ; выводим строку, пока не получим сигнал на завершение 
         mov ax,signal_stop_process
         or ax,ax
         jne @stop_TSR
         call process
         loop @cycle
 
-@stop_TSR:
-       
+@stop_TSR:                                              ; останавливаем программу, восстанавливаем прерывание 2f  
         @deactivate_process title_process_id
 @rrr:
-        jmp @rrr        ; This is STUB 
+        jmp @rrr                                        ; This is STUB 
         
 do_exit proc
         mov ax,0d23h
@@ -141,6 +137,8 @@ do_exit proc
         ret
 do_exit endp
 
+; Процедура вычисления координат вывода строки
+
 get_offset proc
         mov di,79-title_length
         mov ax, 80*2*24
@@ -149,6 +147,8 @@ get_offset proc
         xor si,si
         ret
 get_offset endp
+
+; Основная подпрограмма
 
 process proc
         push bp
@@ -163,7 +163,6 @@ process proc
         mov bl,0fh
         div bl
         mov cs:color,ah
-
         cld
 @stdout_title:        
         mov al, byte ptr ds:title_str+[si]
