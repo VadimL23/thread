@@ -7,6 +7,10 @@
 ; * разделяемой памяти(кольцевому буферу), реализован алго-     *
 ; * ритм Петерсона.                                             *
 ; *                                                             * 
+; * Примечание: Если файл, название которого передано как пара- *
+; * метр при запуске программы не найден, то читается файл с    *                                                             * 
+; * названием test.txt                                          * 
+; *                                                             * 
 ; ***************************************************************
 
 .MODEL SMALL
@@ -21,26 +25,26 @@ EXTRN read:PROC, clrscr:PROC, paramstr_array:BYTE, paramstr:PROC, seek_start:PRO
 
 data segment PARA PUBLIC 'DATA'
    ;---------------------- file --------------------------------
-    file_name db 'text.txt',0
+    file_name db 'text.txt',0                           ; Хранит имя файла
     db 100 dup(0)
-    handle dw 0
-    file_not_found_err db 'File not found!$'
-    allredy_installed_err db 'Allredy installed!$'
+    handle dw 0                                         ; Хранит хэндл файла
+    file_not_found_err db 'File not found!$'            ; Ошибка что файл не найден
+    allredy_installed_err db 'Allredy installed!$'      ; Ошибка, что резидент уже в памяти
    ;---------------------- file --------------------------------
 
     ;--------------------- queue ------------------------------
-    head dw 0                   ; указатель начала кольцевого буфера
-    tail dw 0                   ; указатель хвота кльцевого буфера
-    buff_size equ 3             ; Размер очереди (количество строк)
-    buff_string_length equ 23   ; Размер строки (1 байт на длину + 22 байт на данные)
+    head dw 0                                           ; указатель начала кольцевого буфера
+    tail dw 0                                           ; указатель хвота кльцевого буфера
+    buff_size equ 3                                     ; Размер очереди (количество строк)
+    buff_string_length equ 23                           ; Размер строки (1 байт на длину + 22 байт на данные)
     buff_str db buff_size dup (buff_string_length dup(20h)) ; кольцевой буфер
     ;--------------------- queue ------------------------------
 
     ;-------- for G.L.Peterson algorithm since 1981 year -------
         true equ 1
         false equ 0
-        thread_count equ 2
-        intrested db 2 dup(0)
+        thread_count equ 2      ; Количество нитей
+        intrested db 2 dup(0)   
         turn db 0
     ;============================================================
 
@@ -53,23 +57,24 @@ code segment PARA PUBLIC 'code'
     stdout equ 1
     cr     equ 10                 ; перевод каретки
  
-;     readwrite_process_id equ 1  ; id процесса чтения из файла
-    process_write_id equ 2        ; id процесса вывода на экран
-    installed equ 0ffh            ; константа для проверки уже запущен процеили нет, для избежания дубля резедента в памяти
+;     readwrite_process_id equ 1                        ; id процесса чтения из файла
+    process_write_id equ 2                              ; id процесса вывода на экран
+    installed equ 0ffh                                  ; Константа для проверки уже запущен процеили нет, для избежания дубля резедента в памяти
     process_function_2f equ 0c0h + readwrite_process_id -1  ; Функция процесса, прерывания 2f
    ;------ screen --------
         
-    wnd TWind<1,0,15,39,1,1,14,38>  ; структура для построения окна программы
-    program_length dw 0             ; хранит длину программы в параграфах
-    signal_stop_process dw 0        ; сигнал остановки процесса
+    wnd TWind<1,0,15,39,1,1,14,38>                      ; Структура для построения окна программы
+    program_length dw 0                                 ; Хранит длину программы в параграфах
+    signal_stop_process dw 0                            ; Сигнал остановки процесса
     ;------ Vectors -------------
-    old_2fh dd 0                    ; хранит значение вектора 2f 
+    old_2fh dd 0                                        ; Хранит значение вектора 2f 
     ;-----------------------------
  
 ; Обработчик прерывания 2f
-new_2fh proc
-    local
-    cmp ah, process_function_2f
+
+new_2fh proc                                            ; Перепишем прерывание 2f, установим пользовательскую функцию, для
+    local                                               ; проверки резидента в памяти и для обработки сигнала завершения программы
+    cmp ah, process_function_2f                         ; Проверяем наша функция вызвана или нет
     jne @exit
     cmp al,0
     jne @title_2f_0
@@ -78,7 +83,7 @@ new_2fh proc
 @title_2f_0:
     cmp al,0ffh
     jne @title_2f_ff
-    mov cs:signal_stop_process,1
+    mov cs:signal_stop_process,1                        ; Вызвана функция остановки программы
     @restore_vect 2fh cs:old_2fh
     jmp @exit
 @title_2f_ff:
@@ -87,6 +92,7 @@ new_2fh proc
 new_2fh endp
 
 ; Макрос для реализации алгоритма Петерсона
+
 @enter_region macro process
    mov si,1
    sub si,process
@@ -98,31 +104,31 @@ endm
 
 init:
         mov ax, data
-        mov ds,ax
-        mov ax,zzzz
-        mov dx, es
-        sub ax,dx
-        mov cs:program_length,ax                ; Вычисление размера программы в параграфах
-        xor ax,ax                               ; для оставления программы в памяти резедентной
+        mov ds,ax                                       ; Вычисление размера программы в параграфах
+        mov ax,zzzz                                     ; для оставления программы в памяти резедентной TSR
+        mov dx, es                                      ; es = PSP
+        sub ax,dx                                       ; ax = длина программы в параграфах
+        mov cs:program_length,ax                        
+        xor ax,ax                                       
         mov ah,process_function_2f
         int 2fh
-        cmp al, installed
+        cmp al, installed                               ; Проверим что нет дубля программы в памяти
         jne @not_installed
         call do_exit
 
-@not_installed:        
+@not_installed:                                         ; Устанавливаем вектор 2f
         @change_vect 2fh new_2fh cs:old_2fh
         mov ax, seg code
         mov ds, ax
-        call get_file_name_from_paramstr
+        call get_file_name_from_paramstr                ; Получаем параметр командной строки
 
 @without_param:
-        ;call clrscr                            ; commit it after test !!!
+        ;call clrscr                                    ; commit it after test !!!
         mov ax, seg wnd
         push ax 
         mov ax, offset wnd
         push ax
-        call far ptr draw_window                ; инициализация окна
+        call far ptr draw_window                        ; инициализация окна
         mov ax,seg wnd
         mov ds,ax
         mov dh,byte ptr wnd.inner_right_bottom_row
@@ -139,13 +145,13 @@ init:
         sub ax,100h                                     ;
         mov word ptr es:[di].TThread.r_sp,ax            ;
 
-outprog:                                        ; завершаем и оставляем резидентной
+outprog:                                                ; завершаем и оставляем резидентной
         mov dx,cs:program_length
         mov ax, 3100h
         int 21h
 
 
-@start_process_read:                            ; подпрограмма чтения из файла              
+@start_process_read:                                    ; подпрограмма чтения из файла              
        call open_file
 @cycle:  
         @enter_region 0
@@ -161,7 +167,7 @@ outprog:                                        ; завершаем и оставляем резидент
         call process_read_from_file
         jmp @cycle
 
-@start_process_write:                           ; подпрограмма вывода на экран                  
+@start_process_write:                                   ; подпрограмма вывода на экран                  
         @enter_region 1
 @wait_write:
         cmp byte ptr turn,1
@@ -176,13 +182,13 @@ outprog:                                        ; завершаем и оставляем резидент
         jmp @start_process_write
 
 @stop_TSR:
-        @deactivate_process readwrite_process_id ; остановим программу и освободим память
+        @deactivate_process readwrite_process_id        ; Остановим программу и освободим память, восстанавливаем вектора
 @rrr:
-        jmp @rrr                                 ; This is STUB 
+        jmp @rrr                                        ; This is STUB 
 
-do_exit proc
-        mov ax,0d23h
-        push ax
+do_exit proc                                            ; Выполняем выход из программы,
+        mov ax,0d23h                                    ; с ошибкой, программа уже установлена в памяти
+        push ax                                         ; 
         call gotoxy
         mov ax, seg allredy_installed_err
         mov ds,ax
@@ -232,14 +238,14 @@ process_stdout proc
         xchg di, ax
         lea bx, buff_str[di]
         xor cx,cx
-        mov cl, [bx]            ; количество символов в строке
-        inc bx                  ; указатель на начало строки
+        mov cl, [bx]                            ; количество символов в строке
+        inc bx                                  ; указатель на начало строки
         call stdout_string  
         mov bx, [tail]
         inc bx
         cmp bx, buff_size
         jl @no_wrap_tail
-        xor bx, bx               ; Сброс tail, если достигнут конец буфера
+        xor bx, bx                              ; Сброс tail, если достигнут конец буфера
 @no_wrap_tail:
         mov tail, bx
         mov ax, [head]
@@ -361,7 +367,6 @@ scroll_window_up proc
         pop bx dx cx
         ;******* getxy ******
         cmp ah, cs:[bx].TWind.inner_left_top_row
-          
         delay 10
         mov ah, byte ptr cs:[bx].TWind.inner_left_top_row
         inc ah
@@ -410,6 +415,8 @@ scroll_up proc
         ret 8
 scroll_up endp
 
+; Процедура читает имя файла из параметра запуска программы
+
 get_file_name_from_paramstr proc 
         push bp
         mov bp,sp
@@ -440,9 +447,13 @@ rep     movsb
 get_file_name_from_paramstr endp
 code ends 
 
+; Зарезервируем стек
+
 stack segment para stack
         dw 200h dup(0)
 stack ends
+
+; Сегмент необходим для вычисления размера программы
 
 zzzz segment
 zzzz ends

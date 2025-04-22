@@ -82,14 +82,9 @@ paramstr_err db 0ch,0dh,'Error in param string.$'
     exec_moved_object_err db 'Something went wrong with the moved object process.$'
     ;*******************************
 
-      wnd TWind<16,0,22,79,17,1,21,78>
+    ;------ screen --------
+    wnd TWind<16,0,22,79,17,1,21,78>
    
-    col_max = 79
-    row_max = 21
-
-    cursor dw 0
-    stdot equ 1te
-   ;------ screen --------
 
     thread_array TThread 5 dup(<>)
 data ends
@@ -112,42 +107,48 @@ main proc
 
     call draw_window_process
  
-    call init_reader_writer_process
-    inc cs:threadsRegistered
+    call init_reader_writer_process         ; Запускаем процесс с двумя потоками (читатель файла/писатель на экран)
+    inc cs:threadsRegistered                ; Увеличиваем счетчик установленных потоков
     inc cs:threadsRegistered
 
-    call init_title_process
+    call init_title_process                 ; Запускаем поток строки заголовка проекта
     inc cs:threadsRegistered
   
-    call init_ball_process
+    call init_ball_process                  ; Запускаем поток движущегося обьекта
     inc cs:threadsRegistered
   
-    call init_clock_process
+    call init_clock_process                 ; Запускаем поток часы
     inc cs:threadsRegistered
  
-   call init_interrupts
+   call init_interrupts                     ; Инициализируем прерывания
 @infinity:
-    mov ax,cs:is_all
+    mov ax,cs:is_all                        ; Активное ожидание - флаг is_all == true - выход из программы
     or ax,ax
     je @infinity
 
-    mov ax,0c0ffh       ; join process 1
+    mov ax,0c0ffh                           ; join process 1
     int 2fh
 
-    mov ax,0c1ffh       ; join process 2
+    mov ax,0c1ffh                           ; join process 2
     int 2fh
 
-    mov ax,0c2ffh       ; join process 3
+    mov ax,0c2ffh                           ; join process 3
     int 2fh
 
-    mov ax,0c3ffh       ; join process 4
+    mov ax,0c3ffh                           ; join process 4
     int 2fh
 
-    @deactivate_process main_process_id
-    call restore_interrupts
-    mov ax,4c00h
+    @deactivate_process main_process_id     ; Деактивация основного потока
+    call restore_interrupts                 ; Востанавливаем прерывания
+    call clrscr                             ; Очистим экран перед выходом
+    xor ax,ax                               ; Установим курсов вверх экрана
+    push ax
+    call gotoxy
+    mov ax,4c00h                            ; Нормальный выход, без ошибок
     int 21h
 main endp
+
+; Процедура инициализирует прерывания
 
 init_interrupts proc
     @change_vect 9 new_09h old_09h
@@ -155,11 +156,15 @@ init_interrupts proc
     ret
 init_interrupts endp
 
+; Процедура восстанавливает прерывания
+
 restore_interrupts proc
     @restore_vect 9 old_09h 
     @restore_vect 08h  old_08h 
     ret
 restore_interrupts endp
+
+; Процедура инициализации процесса заголовка проекта
 
 init_title_process proc
     push bp
@@ -180,6 +185,8 @@ init_title_process proc
     ret
 init_title_process endp
 
+; Процедура инициализации читателя/писателя
+
 init_reader_writer_process proc
     push bp
     mov bp, sp
@@ -199,6 +206,7 @@ init_reader_writer_process proc
     ret
 init_reader_writer_process endp
 
+; Процедура инициализации часов
 
 init_clock_process proc
     push bp
@@ -219,6 +227,8 @@ init_clock_process proc
     ret
 init_clock_process endp
 
+; Процедура инициализации движущегося обьекта
+
 init_ball_process proc
     push bp
     mov bp, sp
@@ -238,6 +248,8 @@ init_ball_process proc
     ret
 init_ball_process endp
 
+
+; Процедура инициализации процесса
 ; [pb+10 - param_block_process]
 ; [pb+8 - child_process_name]
 ; [pb+6 - exec_title_keep_err]
@@ -277,7 +289,8 @@ init_process proc
     ret 8
 init_process endp
 
-; Получим аргументы командной строки для запуска дочерних процессов
+; Процедура получения аргументов командной строки для запуска дочерних процессов
+
 make_child_process_paramstr proc
     push bp
     mov bp,sp
@@ -307,7 +320,6 @@ make_child_process_paramstr proc
     mov byte ptr [di], al
     inc di
     mov byte ptr [di], 0dh  
-
     ; Second param
     lea si, paramstr_array
     add si, 3
@@ -324,7 +336,7 @@ make_child_process_paramstr proc
     cld
 rep movsb
 
-; Therd param
+; Third param
     mov cx,2
     xor ax,ax
     lea bx, paramstr_array
@@ -339,7 +351,6 @@ rep movsb
     add bx,ax
     inc bx
     loop @get_third_param
-    
     xor cx,cx
     dec bx
     dec bx
@@ -350,18 +361,17 @@ rep movsb
     mov al,20H
     stosb
  rep   movsb
-
- 
 @fail_paramstr:
     print_str paramstr_err
     jmp @without_param
-
 @without_param:
     pop si di bx ax
     mov sp, bp
     pop bp
     ret
 make_child_process_paramstr endp
+
+; Процедура освобождения неиспользуемой памяти
 
 free_not_used_mem proc
     push bp
@@ -379,6 +389,8 @@ free_not_used_mem proc
     ret
 free_not_used_mem endp
 
+; Процедура отрисовки основного окна
+
 draw_window_process proc
     push bp
     mov bp,sp
@@ -388,7 +400,6 @@ draw_window_process proc
     mov ax, offset wnd
     push ax
     call far ptr draw_window
-
     mov ax, offset wnd
     push ax 
     mov ax, text_color
@@ -403,6 +414,7 @@ draw_window_process proc
     ret
 draw_window_process endp
 
+; Процедура печаты сообщения на экран
 ; bp+4 - str length
 ; bp+6 - str offset and str ended $
 ; bp+8 - attr
@@ -418,12 +430,7 @@ print proc
     mov dh, byte ptr [di].TWind.inner_left_top_row 
     push dx
     call gotoxy
-
     mov cx, [bp+4]
-    ; dec cx
-    ; push cx
-    ; mov si, [bp+6]
-
 @std_out_space:    
     mov bx,[bp+8]
     mov al, ' '
@@ -441,14 +448,12 @@ print proc
     push dx
     call gotoxy
     loop @std_out_space
-
     mov dl, byte ptr [di].TWind.inner_left_top_col 
     mov dh, byte ptr [di].TWind.inner_left_top_row 
     push dx
     call gotoxy
     mov cx, [bp+4]
 @std_out:
-
 ;******* getxy ******
     push cx dx bx
     mov bh,0
@@ -457,7 +462,6 @@ print proc
     mov ax, dx
     pop bx dx cx
 ;******* getxy ******
-
     cmp al, [di].TWind.right_bottom_col
     jnz @std_out_str_continue
     mov al, [di].TWind.left_top_col
@@ -465,13 +469,11 @@ print proc
     inc ah
     push ax
     call gotoxy
-
 @std_out_str_continue:
     mov al, ds:[si]
     call write
     inc si
     loop @std_out
-
     pop di dx bx ax si cx
     mov sp, bp
     pop bp
@@ -502,6 +504,8 @@ clrwind proc
         ret 8
 clrwind endp
 
+; Процедура инициализации таблицы потоков
+
 init_process_table proc
     push bp
     mov bp, sp
@@ -520,13 +524,15 @@ init_process_table proc
     pop bp
     ret
 init_process_table endp
-
 code ends
+
+; Зарезервируем стек
 
 stack segment STACK
     dw 200h dup (0)
 stack ends
 
+; Сегмент необходим для вычисления размера программы
 
 zzz segment
 zzz ends

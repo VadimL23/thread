@@ -1,7 +1,12 @@
 
 ; ***************************************************************
 ; *    ПОДПРОГРАММА ПЛАНИРОВЩИКА                                *
+; *                                                             *
+; *  Примечание: программа написана из программы по             *
+; * Лабораторной работе №3                                      *
+; *                                                             *
 ; ***************************************************************
+
 .model SMALL
 include int_macr.inc
 include struc.inc
@@ -17,38 +22,41 @@ public threadsRegistered
 code segment PARA PUBLIC 'code'
 assume cs:code, ds:code
 
-disableHardwareEvents dw 0
-threadsRegistered dw 0 
-parallelStart   dw 1
-threadNumber   dw 0
-tsoffset_start dw 0
-NumPrev dw 0
-preemptiveSwitch dw 1
-parallelfinished dw 0
+disableHardwareEvents dw 0          ; Флаг вкл/отк перерывание стоковое прерывание
+threadsRegistered dw 0              ; Количество зарегистрированных потоков в таблице потоков
+parallelStart   dw 1                ; Первый проход 
+threadNumber   dw 0                 ; Номер текущего процесса
+tsoffset_start dw 0                 ; Вспомогательная переменная, хранит смещение
+NumPrev dw 0                        ; Хранит предыдущий номер потока
+preemptiveSwitch dw 1               ; Флаг разрешено/запрещено переключение потоков
 
-ThreadTable dw 0 
+ThreadTable dw 0                    ; Смещение твблицы потоков
 
-mainss dw 0
-mainsp dw 0
-mainds dw 0
+mainss dw 0                         ; SS - основного процесса
+mainsp dw 0                         ; SP - основного процесса
+mainds dw 0                         ; DS - основного процесса
 
-tsoffset dw 0
+tsoffset dw 0                       ; Вспомогательная переменная, хранит смещение
 
-old_08h dd 0
+old_08h dd 0                        ; Адрес стокового прерывания 08
 
-video_addr dw 0
+video_addr dw 0                     ; Адрес видео
            dw 0b800h
-str_c equ 0bh
-str_c_yellow equ 0eh
-str_c_white equ 0fh
+
+str_c equ 0bh                       ; Цвет строки
+str_c_yellow equ 0eh                ; Цвет строки желтый
+str_c_white equ 0fh                 ; Цвет строки белый
 
 
-pos_to_out_state equ 80*2*23
+pos_to_out_state equ 80*2*23        ; Константа, кординаты вывода на экран
+
+; Строка - активный поток
 status_str db 'I',str_c,'D',str_c, ' '
            db  str_c,'а',str_c,'к',str_c,'т',str_c,'и',str_c,'в',str_c,'н',str_c
            db 'о',str_c,'г',str_c,'о',str_c,' ',str_c,'п',str_c,'о',str_c
            db 'т',str_c,'о',str_c,'к',str_c,'а',str_c,':',str_c,' ',str_c, ' ',str_c,' ',str_c     ;46
 
+; Строка статусы потоков
 thread_str db ' ', str_c_yellow
            db 'I',str_c_yellow,'D',str_c_yellow,'#',str_c_yellow,'0',str_c_yellow,'-',str_c_yellow,' ',str_c_yellow,' ',str_c_yellow,' ',str_c_yellow
            db 'I',str_c_yellow,'D',str_c_yellow,'#',str_c_yellow,'1',str_c_yellow,'-',str_c_yellow,' ',str_c_yellow,' ',str_c_yellow,' ',str_c_yellow
@@ -102,7 +110,6 @@ scheduler proc far
     mov ds, ax
     mov ax, bp
     mov si, ax
-
     xor ax,ax
     mov al, bios_process_linked_seg
     mov es,ax
@@ -112,7 +119,6 @@ scheduler proc far
     mov cs:ThreadTable, di
     mov ax,word ptr es:[bx+2]
     mov es,ax                   ; es:di -> tableThreads
-
     add di, 22
     mov cx, 12
 @l:
@@ -143,13 +149,11 @@ scheduler proc far
     mov cs:tsoffset,ax
     add ax,2
     mov cs:tsoffset_start,ax   ; tsoffset_start := tsOffset + 2;
-
     push ds
     mov ax, ss
     mov ds, ax
     mov ax, bp
     mov si, ax
-   
     xor ax,ax
     mov al, bios_process_linked_seg
     mov es,ax
@@ -167,7 +171,6 @@ scheduler proc far
     add si, 2
     sub di, 2
     loop @l1
-
     mov ax, cs:ThreadTable
     add ax, cs:tsoffset_start
     mov di, ax
@@ -234,20 +237,16 @@ scheduler proc far
     mul dx
     sub ax,3
     mov cs:tsOffset,ax
-    
     mov ax,cs:threadNumber     ;tsoffset_start := (ThreadNumber) * sizeof(TThreadStateWord);
     mov dx, size TThread
     mul dx
     mov cs:tsoffset_start,ax
-
-
 ;*****************************************
     mov dx, ds
     mov ax, cs:mainds
     mov ds, ax
     mov si, cs:threadTable
     add si, cs:tsOffset
-    
     std
     lodsw
     mov ss, ax
@@ -255,24 +254,19 @@ scheduler proc far
     mov bp, ax
     add ax, 12 * 2
     mov sp, ax
-
     mov si, cs:ThreadTable
     add si, cs:tsoffset_start
-
     cld
     mov cx, 12
-
     @m1:
     lodsw
     push ax
     loop @m1 
 
     mov ds, dx ;end {loading from TS}
-
 ;*****************************************
 
 @no_load_from_TS:
-
     ;  else if (not ts[Threadnumber].active) and (Threadnumber = NumPrev) then
     mov ax, cs:threadNumber
     mov dx, size TThread
@@ -328,8 +322,6 @@ rep movsb
     mov cx, 96
 rep movsb
  ; Печатает статусы потоков
-
-    
     mov cx, threadsRegistered
     lea bx, status_threads_table
 @get_statuses:
@@ -360,7 +352,6 @@ loop @get_statuses
     inc bx
     add di, 12
 loop @out_statuses
-
 
 ; ************* STAUS STDOUT ***************
     mov sp, bp

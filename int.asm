@@ -1,3 +1,7 @@
+; ***************************************************************
+; *    ПОДПРОГРАММЫ ДЛЯ ОБРАБОТКИ ПРЕРЫВАНИЙ КЛАВИАТУРЫ         *
+; *                                                             *
+; ***************************************************************
 .model SMALL
 
 include int_macr.inc
@@ -39,14 +43,14 @@ kb_F7 equ 41h
 kb_F8 equ 42h
 kb_F9 equ 43h
 
-kb_right_arrow equ 4dh
-kb_left_arrow  equ 4bh
-kb_down_arrow  equ 50h
-kb_up_arrow    equ 48h
+kb_right_arrow equ 4dh  ; Стрелка вверх
+kb_left_arrow  equ 4bh  ; Стрелка влево
+kb_down_arrow  equ 50h  ; Стрелка вниз
+kb_up_arrow    equ 48h  ; Стрелка вверх
 
 kb_r  equ 13h
 
-    old_09h   dd 0
+    old_09h   dd 0      ; Старый вектор 09
 
 @kb_handler macro sting
         @perepere_int09
@@ -58,8 +62,6 @@ kb_r  equ 13h
         mov ax, 4
         push ax
         call far ptr dump
-
-        ;  jmp @to_exit
 endm
 
 @kb_handler_start_stop_process macro process_number
@@ -200,14 +202,6 @@ code ends
 
 data segment PARA PUBLIC 'data'
 data ends
-
-
-; stack segment stack
-; db 100 dw dup(0)
-; stack ends
-
-
-
 
 zzz segment
 zzz ends

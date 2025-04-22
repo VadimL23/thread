@@ -15,35 +15,33 @@ include utils.inc
 EXTRN gotoxy:PROC, clrscr:PROC, _getxy:PROC, paramstr:PROC, paramstr_array, atoi:PROC
 
 ; title_process_id equ 2                                ; Номер процесса
-is_test equ 0
-installed equ 0ffh
-function_2f equ 0c0h + title_process_id -1              ; номер функции 2f
+is_test equ 0                                           ; Флаг тест режим
+installed equ 0ffh                                      ; Константа для проверки уже запущен процеили нет, для избежания дубля резедента в памяти
+function_2f equ 0c0h + title_process_id -1              ; Функция процесса, прерывания 2f
 
 data segment PARA PUBLIC 'DATA'
-    program_length dw 0
-    title_str db 'Курсовой проект. Лачков Вадим Валерьевич. Группа: ПБ-21'
-    title_length equ $-title_str
-    allredy_installed_err db 'Allredy installed!$'
-    location dw 0
+    program_length dw 0                                 ; Хранит длину программы в параграфах
+    title_str db 'Курсовой проект. Лачков Вадим Валерьевич. Группа: ПБ-21' ; Выводимая строка заголовка
+    title_length equ $-title_str                        ; Хранит длину строки
+    allredy_installed_err db 'Allredy installed!$'      ; Ошибка, что резидент уже в памяти
+    location dw 0                                       ; Хранит координаты
 data ends
 
 code segment PARA PUBLIC 'CODE'
     ASSUME CS:code, DS:data, SS:stack
-
 jmp init
 
 ;------------------- Vectors -----------------------
-
-old_2fh dd 0
+old_2fh dd 0                                            ; Хранит значение вектора 2f
 ;---------------------------------------------------
-color db 1
-signal_stop_process dw 0
+color db 1                                              ; Хранит текущий цвет строки
+signal_stop_process dw 0                                ; Сигнал остановки процесса
 maincs dw 0
 ;---------------------------------------------------
 
-new_2fh proc
-    local
-    cmp ah, function_2f
+new_2fh proc                                            ; Перепишем прерывание 2f, установим пользовательскую функцию, для
+    local                                               ; проверки резидента в памяти и для обработки сигнала завершения программы
+    cmp ah, function_2f                                 ; Проверяем наша функция вызвана или нет
     jne @exit
     cmp al,0
     jne @title_2f_0
@@ -51,7 +49,7 @@ new_2fh proc
     jmp @exit
 @title_2f_0:
     cmp al,0ffh
-    jne @title_2f_ff
+    jne @title_2f_ff                                    ; Вызвана функция остановки программы
     mov cs:signal_stop_process,1
     @restore_vect 2fh cs:old_2fh
     jmp @exit
@@ -77,15 +75,15 @@ new_2fh endp
         jne @without_param
         inc location
 
-@without_param:                                        ; вычисляем размер в параграфах, оставляем резидентной
-        mov ax,zzz
-        mov dx, es
-        sub ax,dx
-        mov program_length,ax
+@without_param:                                         ; Вычисление размера программы в параграфах
+        mov ax,zzz                                      ; для оставления программы в памяти резедентной TSR
+        mov dx, es                                      ; es = PSP
+        sub ax,dx                               
+        mov program_length,ax                           ; ax = длина программы в параграфах
         xor ax,ax
         mov ah,function_2f
         int 2fh
-        cmp al, installed
+        cmp al, installed                               ; Проверим, что нет дубля программы в памяти
         jne @not_installed
         call do_exit
 @not_installed:  
@@ -103,28 +101,28 @@ new_2fh endp
         mov ax, 0b800h
         mov es,ax
         
-       @fork title_process_id, @cycle
+       @fork title_process_id, @cycle                   ; Установим поток в таблице потоков
 
-        mov ax, cs                                     ; выходим и оставляем TSR
+        mov ax, cs                                      ; Выходим и оставляем TSR
         mov cs:maincs, ax 
         mov dx,program_length
         mov ax, 3100h
         int 21h
 
-@cycle:                                                ; выводим строку, пока не получим сигнал на завершение 
+@cycle:                                                ; Выводим строку, пока не получим сигнал на завершение 
         mov ax,signal_stop_process
         or ax,ax
         jne @stop_TSR
         call process
         loop @cycle
 
-@stop_TSR:                                              ; останавливаем программу, восстанавливаем прерывание 2f  
-        @deactivate_process title_process_id
+@stop_TSR:                                              ; Останавливаем программу, восстанавливаем прерывание 2f  
+        @deactivate_process title_process_id            
 @rrr:
         jmp @rrr                                        ; This is STUB 
         
-do_exit proc
-        mov ax,0d23h
+do_exit proc                                            ; Выполняем выход из программы,
+        mov ax,0d23h                                    ; с ошибкой, программа уже установлена в памяти
         push ax
         call gotoxy
         mov ax, seg allredy_installed_err
@@ -179,9 +177,13 @@ process proc
 process endp
 code ends
 
+; Зарезервируем стек
+
 stack segment para stack
         dw 200h dup(0)
 stack ends
+
+; Сегмент необходим для вычисления размера программы
 
 zzz segment
 zzz ends

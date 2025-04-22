@@ -6,54 +6,55 @@
 ; *   10 - вывод в нижнем левом углу экрана                     *
 ; *   11 - вывод в нижнем правом углу экрана                    *
 ; *                                                             *
+; *  Примечание: Если параметр не передан или передан с ошибкой,*
+; *  то по умолчанию часы выводятся в левом верхнем углу экрана *
+; *                                                             *
 ; ***************************************************************
 
 .MODEL SMALL
 include prc_ids.inc
 include struc.inc
+include utils.inc
+include int_macr.inc
 
 EXTRN gotoxy:PROC 
 EXTRN clrscr:PROC, paramstr_array, paramstr:PROC, seek_start:PROC
 
-text_color equ 0ah
-str_length equ 16
-video equ 0b800h
+text_color equ 0ah                                      ; Переменная хранит цвет строки часов
+str_length equ 16                                       ; Длина строки в байтах
+video equ 0b800h                                        ; Сегмент памяти видеодаптера
 
 data segment PARA PUBLIC 'DATA'
-    allredy_installed_err db 'Allredy installed!$'
-    current_time db '0',text_color, '0',text_color,':',text_color,'0',text_color,'0',text_color,':',text_color,'0',text_color,'0',text_color
-    coord dw 0
+    allredy_installed_err db 'Allredy installed!$'      ; Ошибка, что резидент уже в памяти
+    current_time db '0',text_color, '0',text_color,':',text_color,'0',text_color
+                 db '0',text_color,':',text_color,'0',text_color,'0',text_color
+    coord dw 0                                          ; Переменная хранит кординаты для вывода строки часов
 data ends
 
 code segment PARA PUBLIC 'code'
     assume cs:code, ds:data, es:data, SS:stack
     jmp init
 
-    include utils.inc
-    include int_macr.inc
+;     clock_process_id equ 4                            ; id процесса в таблице процессов
+    installed equ 0ffh                                  ; Константа для проверки уже запущен процеили нет, для избежания дубля резедента в памяти
+    process_function_2f equ 0c0h + clock_process_id - 1 ; Функция процесса, прерывания 2f
 
-;     clock_process_id equ 4
-    installed equ 0ffh
-    process_function_2f equ 0c0h + clock_process_id - 1
-
-    include struc.inc
-
-    program_length dw 0
-    signal_stop_process dw 0
+    program_length dw 0                                 ; Хранит длину программы в параграфах
+    signal_stop_process dw 0                            ; Сигнал остановки процесса
     ;------ Vectors -------------
-    old_2fh dd 0
+    old_2fh dd 0                                        ; Хранит значение вектора 2f
     ;-----------------------------
 
-new_2fh proc
-        local
-        cmp ah, process_function_2f
+new_2fh proc                                            ; Перепишем прерывание 2f, установим пользовательскую функцию, для
+        local                                           ; проверки резидента в памяти и для обработки сигнала завершения программы
+        cmp ah, process_function_2f                     ; Проверяем наша функция вызвана или нет
         jne @exit
         cmp al,0
         jne @title_2f_0
         mov al,0ffh
         jmp @exit
 @title_2f_0:
-        cmp al,0ffh
+        cmp al,0ffh                                     ; Вызвана функция остановки программы
         jne @title_2f_ff
         mov cs:signal_stop_process,1
         @restore_vect 2fh cs:old_2fh
@@ -65,15 +66,15 @@ new_2fh endp
 
 init: 
         mov ax, data
-        mov ds,ax
-        mov ax,zzzz
-        mov dx, es
-        sub ax,dx
-        mov cs:program_length,ax
-        xor ax,ax
+        mov ds,ax                                       ; Вычисление размера программы в параграфах
+        mov ax,zzzz                                     ; для оставления программы в памяти резедентной TSR
+        mov dx, es                                      ; es = PSP
+        sub ax,dx                                       ; ax = длина программы в параграфах
+        mov cs:program_length,ax                       
+        xor ax,ax                                       
         mov ah,process_function_2f
         int 2fh
-        cmp al, installed
+        cmp al, installed                               ; Проверим, что нет дубля программы в памяти
         jne @not_installed
         call do_exit
 
@@ -82,22 +83,14 @@ init:
 
         mov ax, seg code
         mov ds, ax
-
-        call get_coord
+        call get_coord                                   ; Получим кординаты вывода часов
 
 @without_param:
         ;  call clrscr     ; TODO:: commit it after test !!!
-      
         mov ax, data
         mov ds, ax  
 
-        @fork clock_process_id, @start_process
-
-;         @cycle1:   
-;         call process
-; @queue_empt1:
-;         jmp @cycle1
-
+        @fork clock_process_id, @start_process          ; Установим поток в таблице потоков
 
 outprog:
         mov dx,cs:program_length
@@ -114,13 +107,13 @@ outprog:
         jmp @cycle
 
 @stop_TSR:
-        @deactivate_process clock_process_id
+        @deactivate_process clock_process_id            ; Остановим программу и освободим память, восстанавливаем вектора
 @rrr:
         jmp @rrr        ; This is STUB 
 
-do_exit proc
-        mov ax,0d23h
-        push ax
+do_exit proc                                            ; Выполняем выход из программы,
+        mov ax,0d23h                                    ; с ошибкой, программа уже установлена в памяти
+        push ax                                         
         call gotoxy
         mov ax, seg allredy_installed_err
         mov ds,ax
@@ -132,6 +125,8 @@ do_exit proc
         ret
 do_exit endp
 
+; Процедура основного процесса
+
 process proc
         push BP
         mov bp,sp
@@ -141,6 +136,8 @@ process proc
         pop bp
         ret
 process endp
+
+; Процедура вывода часов на экран
 
 print_time proc
         push BP
@@ -170,52 +167,46 @@ rep     movsb
         ret
 print_time endp
 
+; Процедура получения текущего времени
+
 get_time proc
         push bp
         mov bp,sp
         push ax cx dx
         mov ah,2ch
         int 21h
-        ; ????? ? ?????? ???
-        mov ax, cx
+        mov ax, cx                              ; Получаем часы
         and ax,0ff00h
         shr ax,8
         aam
         add ax,3030h
-        ; xchg ah,al
         mov byte ptr current_time,ah
         mov byte ptr [current_time+2],al
-
-        ; ????? ??????
-        mov ax, cx
+        mov ax, cx                              ; Получаем минуты
         and ax,0ffh
         aam
         add ax,3030h
-        ; xchg ah,al
         mov byte ptr [current_time+6],ah
         mov byte ptr [current_time+8],al
-
-        ; ????? ???
-        mov ax, dx
+        mov ax, dx                              ; Получаем секунды
         and ax,0ff00h
         shr ax,8
         aam
         add ax,3030h
-        ; xchg ah,al
         mov byte ptr [current_time+12],ah
         mov byte ptr [current_time+14],al
         add ax,3030h
-
         pop dx cx ax
         mov sp,bp
         pop bp
         ret
 get_time endp
 
+; Процедура получения кординат вывода на экране
+
 get_coord proc
         push bp
         mov bp, sp
-
         push cx bx es ds
         call paramstr  
         mov al, byte ptr paramstr_array
@@ -231,20 +222,17 @@ get_coord proc
         push es
         push ds
         pop es
-        
         mov ax,seg paramstr_array
         mov ds,ax
         lea di,coord
         mov si,bx
     rep movsb
         pop es
-
         mov ah, byte ptr coord
         mov al, byte ptr [coord+1]
         sub ax, 3030h
         mov byte ptr [coord+1],ah
         xor ah,ah
-
         mov cl,80
         mul cl
         or al,al
@@ -254,7 +242,6 @@ get_coord proc
         mov al,0
 @norm_col:
         mov byte ptr [coord],al
-
         mov al, byte ptr [coord+1]
         mov cl,24
         mul cl
@@ -263,17 +250,21 @@ get_coord proc
         mov al,0
 @norm_row:
         mov byte ptr [coord+1], al
-        
 @@done:
         pop ds es bx cx
         mov sp,bp
         pop bp
         ret
 get_coord endp
+code ends 
+
+; Зарезервируем стек
 
 stack segment para stack
         dw 200h dup(0)
 stack ends
+
+; Сегмент необходим для вычисления размера программы
 
 zzzz segment
 zzzz ends

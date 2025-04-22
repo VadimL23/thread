@@ -1,3 +1,4 @@
+; Макрос реализует задержку
 
 delay macro time
         local
@@ -12,6 +13,8 @@ delay macro time
         loop @@
         pop cx
 endm
+
+; Макрос выводит строку на экран
 
 print_str macro str
     push dx

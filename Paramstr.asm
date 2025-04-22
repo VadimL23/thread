@@ -1,6 +1,16 @@
-.MODEL SMALL
+; ***************************************************************
+; *    ПОДПРОГРАММА ПОЛУЧЕНИЯ СТРОКИ ПАРАМЕТРОВ                 *
+; *                                                             *
+; * Примечание:                                                 *
+; * Строка параметров возвращается в указателе на глобальную    *
+; * переменную paramstr_array. Первый байт содержит количество  *
+; * строк. Каждая строка имеет следующий формат. Первый байт    *
+; * это количество символов в строке, затем сама бфйтовая строка*
+; *                                                             *
+; *                                                             *
+; ***************************************************************
 
-cr equ 0dh
+.MODEL SMALL
 
 public paramstr
 public paramstr_array
@@ -38,7 +48,6 @@ inc si
 @next_byte_head:
     loop @loads_bytes_head
 @exit_trim_head:
-   ; jz @empty_str
    
 ; Get offset start
     mov ax,bx
@@ -66,7 +75,6 @@ inc si
 @next_byte_tail:
     loop @loads_bytes_head
 @exit_trim_tail:
-
     inc cx
     mov bx, cx
     mov ax, es:[supl_offset_start_at]
@@ -97,7 +105,7 @@ rep movsb
 @skip_delimiters:
     cmp al, 0Dh          ; Если конец строки (0Dh), завершаем
     je @split_done
-    ;lodsb                ; Загружаем символ из строки в AL
+                         ; Загружаем символ из строки в AL
     mov al, byte ptr ds:[si]
     inc si
     cmp al, ' '          ; Если пробел, пропускаем
@@ -146,13 +154,12 @@ code ends
 
 data segment PARA PUBLIC 'data'
 
-cmd_tail_addr dd 00000080h
-tail_raw_length db 0
-tail_raw db 254 dup(0)
+cmd_tail_addr dd 00000080h      ; Адрес строки параметров в PSP
+tail_raw_length db 0            ; Переменная хранит длину сырой строки
+tail_raw db 254 dup(0)          ; Переменная хранит сырую строку
 
-supl_offset_start_at dw 0
-paramstr_array db 256 dup (0)
+supl_offset_start_at dw 0       ; Вспомогательная переменная
+paramstr_array db 256 dup (0)   ; Массив строк параметров
 
 data ends
-
 end
