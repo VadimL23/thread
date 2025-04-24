@@ -47,5 +47,6 @@ tasm /z/zi/n Schedule.asm
 tasm /z/zi/n main.asm
 tlink /v main exec Draw_w System Paramstr int Schedule 
 @REM @REM pause
- main.exe 1 test1.txt 01  
+
+main.exe 0 test1.txt 01  
 @REM td main.exe 
